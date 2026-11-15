@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+{{if .Refresh}}<meta http-equiv="refresh" content="3">{{end}}
+<title>{{.Product}} admin</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--fg:#1d2024;--mut:#667;--line:#dde1e6;--acc:#0082c9;--bad:#b00020;--ok:#1a7f37}
+@media(prefers-color-scheme:dark){:root{--bg:#16181a;--card:#222527;--fg:#e8eaed;--mut:#9aa;--line:#363a3e;--acc:#4aa8e0;--bad:#ff6b7f;--ok:#4cc38a}}
+body{font:15px/1.45 system-ui,sans-serif;margin:0;background:var(--bg);color:var(--fg)}
+main{max-width:980px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:14px 0;overflow-x:auto}
+h1{font-size:20px;margin:6px 0}h2{font-size:16px;margin:0 0 10px}h3{font-size:14px;margin:16px 0 6px}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--mut);font-weight:600;font-size:13px}td.n,th.n{text-align:right;white-space:nowrap}
+input,select,button{font:inherit;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+button{background:var(--acc);border-color:var(--acc);color:#fff;cursor:pointer}button.d{background:none;color:var(--bad);border-color:var(--bad)}
+form.i{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0}
+.flash{background:var(--card);border-left:4px solid var(--acc);padding:8px 12px;border-radius:6px}.mut{color:var(--mut)}.path{font:13px ui-monospace,monospace;color:var(--mut);word-break:break-all}
+progress{width:100%;height:14px}
+.job{border-left:4px solid var(--acc)}.job.done{border-left-color:var(--ok)}.job.failed{border-left-color:var(--bad)}
+.kv{display:flex;flex-wrap:wrap;gap:4px 18px;margin:8px 0}.kv b{font-variant-numeric:tabular-nums}
+</style></head><body><main>
+{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+{{if not .LoggedIn}}
+<section style="max-width:340px;margin:60px auto"><h1>{{.Product}}</h1>
+<form method="post" action="{{$.Base}}/login"><p><input name="user" placeholder="Admin user" autocapitalize="none" required style="width:100%;box-sizing:border-box"></p>
+<p><input name="password" type="password" placeholder="Password" required style="width:100%;box-sizing:border-box"></p>
+<p><button style="width:100%">Log in</button></p></form></section>
+{{else}}
+<header><h1>{{.Product}} · admin</h1>
+<form class="i" method="post" action="{{$.Base}}/logout"><input type="hidden" name="_csrf" value="{{.CSRF}}"><span class="mut">{{.Me}}</span><button class="d">Log out</button></form></header>
+
+{{with .Job}}
+<section class="job {{.State}}">
+<h2>{{.Title}}</h2>
+{{if .Running}}
+  {{if .Determinate}}<progress max="{{.Total}}" value="{{.Done}}"></progress>
+  <div class="kv"><span>{{.Done}} / {{.Total}} files</span><span>rendered <b>{{.Rendered}}</b></span><span>already cached <b>{{.Cached}}</b></span><span>failed <b>{{.Failed}}</b></span>{{if .Derived}}<span title="scaled down from a larger preview, no decoding of the original">from larger preview <b>{{.Derived}}</b></span>{{end}}{{if .ETA}}<span class="mut">{{.ETA}}</span>{{end}}</div>
+  {{else}}<progress></progress>
+  <div class="kv"><span>{{.Phase}}</span><span>folders <b>{{.Dirs}}</b></span><span>files <b>{{.Files}}</b></span>{{if .IsPreviews}}<span>with preview <b>{{.Total}}</b></span>{{end}}</div>{{end}}
+  <div class="path">{{.Current}}</div>
+  <div class="kv"><span class="mut">running {{.Elapsed}}, page refreshes every 3 s</span></div>
+  <form class="i" method="post" action="{{$.Base}}/job-cancel"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><button class="d">Cancel</button></form>
+{{else}}
+  <div class="kv"><b>{{.State}}</b><span class="mut">in {{.Elapsed}}</span>
+  {{if .IsPreviews}}<span>{{.Done}} of {{.Total}} files</span><span>rendered <b>{{.Rendered}}</b></span><span>already cached <b>{{.Cached}}</b></span><span>failed <b>{{.Failed}}</b></span>{{if .Derived}}<span>from larger preview <b>{{.Derived}}</b></span>{{end}}
+  {{else}}<span>folders <b>{{.Dirs}}</b></span><span>files <b>{{.Files}}</b></span><span>{{.Bytes}}</span>{{end}}</div>
+  {{if .Err}}<p style="color:var(--bad)">{{.Err}}</p>{{end}}
+{{end}}
+</section>
+{{end}}
+
+<section><h2>Users and folders</h2>
+<p class="mut">Data folder: <span class="path">{{.DataDir}}</span> · free: {{.Free}}<br>Disk letter case: <b>{{if .CaseInsensitive}}ignored (FAT/exFAT style): "Photos" and "photos" are one folder{{else}}significant (ext4 style){{end}}</b>
+<br>Database: <span class="path">{{.DBPath}}</span> · preview cache: <span class="path">{{.CacheDir}}</span></p>
+<table><tr><th>User</th><th class="n">Files</th><th class="n">Size</th><th class="n">Trash</th><th>Last full scan</th></tr>
+{{range .Users}}<tr><td><b>{{.Name}}</b>{{if .Admin}} <span class="mut">(admin)</span>{{end}}<div class="path">{{.Path}}</div></td>
+<td class="n">{{.Files}}<div class="mut">{{.Dirs}} folders</div></td><td class="n">{{human .Used}}</td>
+<td class="n">{{if .TrashItems}}{{.TrashItems}} items<div class="mut">{{human .TrashSize}}</div>{{else}}<span class="mut">empty</span>{{end}}</td>
+<td>{{.LastScan}}<div class="mut">{{.Devices}} device(s)</div></td></tr>
+<tr><td colspan="5" style="border-bottom:1px solid var(--line)">
+<form class="i" method="post" action="{{$.Base}}/user-passwd"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="name" value="{{.Name}}"><input name="password" type="password" placeholder="new password" size="12" required><button>Set password</button></form>
+<form class="i" method="post" action="{{$.Base}}/user-revoke"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="name" value="{{.Name}}"><button class="d" title="Sign out all phones">Sign out devices</button></form>
+<form class="i" method="post" action="{{$.Base}}/user-delete"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="name" value="{{.Name}}"><label class="mut"><input type="checkbox" name="confirm" value="1" required> sure</label> <button class="d" title="Removes the account only. The files stay on the disk.">Delete account</button></form>
+</td></tr>{{end}}</table>
+<p class="mut">Deleting an account never deletes files: the folder stays on the disk and is listed below under &ldquo;Folders without an account&rdquo;. Files and size come from the server's index. They are exact after a full scan; until then they only include files the server has already seen.</p>
+
+<h3>Add user</h3>
+<form class="i" method="post" action="{{$.Base}}/user-add"><input type="hidden" name="_csrf" value="{{.CSRF}}">
+<input name="name" placeholder="name" autocapitalize="none" required><input name="password" type="password" placeholder="password (8+)" required>
+<label class="mut"><input type="checkbox" name="admin" value="1"> admin</label><button>Create</button></form>
+
+{{if .Unclaimed}}<h3>Folders without an account</h3>
+<p class="mut">These folders in the data directory have a <code>files</code> folder inside but no user (for example a copy of a Nextcloud data directory). Creating an account with the same name connects it to the existing files, nothing is copied or moved.</p>
+<table>{{range .Unclaimed}}<tr><td><b>{{.}}</b></td><td>
+<form class="i" method="post" action="{{$.Base}}/user-add"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="name" value="{{.}}">
+<input name="password" type="password" placeholder="password (8+)" required><label class="mut"><input type="checkbox" name="admin" value="1"> admin</label><button>Create account</button></form></td></tr>{{end}}</table>{{end}}
+</section>
+
+<section><h2>Maintenance</h2>
+<h3>Scan files</h3>
+<p class="mut">Walks a user's folders and updates the index: picks up files added outside the server and makes the numbers above exact. Reads only directory entries, so it is light.</p>
+<form class="i" method="post" action="{{$.Base}}/job-scan"><input type="hidden" name="_csrf" value="{{.CSRF}}">
+<select name="user"><option value="*">all users</option>{{range .Users}}<option>{{.Name}}</option>{{end}}</select>
+<input name="path" placeholder="folder (optional), e.g. Photos/2024"><button>Scan</button></form>
+
+<h3>Generate previews</h3>
+<p class="mut">Renders thumbnails ahead of time, one file at a time at low priority, so folders open instantly in the app. Files that already have a preview are skipped. Sizes snap to 64, 128, 256, 512, 1024 or 2048; add <code>c</code> for crop-to-fill.</p>
+<form class="i" method="post" action="{{$.Base}}/job-previews"><input type="hidden" name="_csrf" value="{{.CSRF}}">
+<select name="user"><option value="*">all users</option>{{range .Users}}<option>{{.Name}}</option>{{end}}</select>
+<input name="path" placeholder="folder (optional)">
+<input name="sizes" value="{{.DefaultSizes}}" size="18" title="e.g. 512, 1024x768, 256c (c = crop to fill)">
+<button>Generate</button></form>
+<p class="mut">Sizes the apps have requested since the server started: {{if .ReqSizes}}{{range $i, $s := .ReqSizes}}{{if $i}}, {{end}}{{$s}}{{end}}{{else}}none yet (open a folder with photos in the app); the field shows the configured default{{end}}.</p>
+</section>
+
+<section><h2>Shared folders</h2>
+<table><tr><th>Folder</th><th>Shared with</th><th>Access</th><th></th></tr>
+{{range .Shares}}<tr><td>{{.Owner}}/{{.Path}}</td><td>{{.Target}}</td><td>{{if .ReadOnly}}read only{{else}}read &amp; write{{end}}</td><td>
+<form class="i" method="post" action="{{$.Base}}/share-delete"><input type="hidden" name="_csrf" value="{{$.CSRF}}"><input type="hidden" name="id" value="{{.ID}}"><button class="d">Remove</button></form></td></tr>
+{{else}}<tr><td colspan="4" class="mut">Nothing shared yet.</td></tr>{{end}}</table>
+<h3>Share a folder</h3>
+<form class="i" method="post" action="{{$.Base}}/share-add"><input type="hidden" name="_csrf" value="{{.CSRF}}">
+<select name="owner">{{range .Users}}<option>{{.Name}}</option>{{end}}</select>
+<input name="path" placeholder="Photos/Family" required>
+<span class="mut">with</span>
+<select name="target">{{range .Users}}<option>{{.Name}}</option>{{end}}</select>
+<label class="mut"><input type="checkbox" name="ro" value="1"> read only</label><button>Share</button></form>
+<p class="mut">The folder appears in the other user's root as <b>folder (owner)</b>, so it never clashes with their own folders.</p></section>
+{{end}}
+</main></body></html>

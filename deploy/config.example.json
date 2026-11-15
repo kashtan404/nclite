@@ -1,0 +1,32 @@
+{
+  "listen": "127.0.0.1:8085",
+  "base_url": "https://cloud.example.com",
+  "trust_proxy": true,
+
+  "db_path":   "/opt/var/nclite/nclite.db",
+  "data_dir":  "/tmp/mnt/DISK/nclite/data",
+  "cache_dir": "/tmp/mnt/DISK/nclite/cache",
+
+  "product_name": "Home Cloud",
+  "mem_limit_mb": 160,
+  "gc_percent": 50,
+  "rescan_minutes": 360,
+  "trash_days": 30,
+  "access_log": false,
+
+  "admin_listen": "127.0.0.1:8090",
+  "admin_url": "http://192.168.1.1:83/admin",
+
+  "preview": {
+    "enabled": true,
+    "workers": 1,
+    "pregen": [512],
+    "ffmpeg": "ffmpeg",
+    "heif_convert": "heif-convert",
+    "pdftoppm": "pdftoppm",
+    "nice": 10,
+    "timeout_sec": 90,
+    "quality": 5,
+    "exclude_ext": []
+  }
+}

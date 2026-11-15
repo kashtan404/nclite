@@ -1,0 +1,23 @@
+#!/bin/sh
+# Entware init script: /opt/etc/init.d/S99nclite
+NAME=nclite
+BIN=/opt/bin/nclite
+CONF=/opt/etc/nclite/config.json
+PIDFILE=/opt/var/run/$NAME.pid
+LOG=/opt/var/log/$NAME.log
+
+start() {
+    echo "Starting $NAME"
+    start-stop-daemon -S -b -m -p $PIDFILE -x /bin/sh -- -c "exec $BIN -config $CONF serve >>$LOG 2>&1"
+}
+stop() {
+    echo "Stopping $NAME"
+    start-stop-daemon -K -p $PIDFILE
+    rm -f $PIDFILE
+}
+case "$1" in
+    start) start ;;
+    stop) stop ;;
+    restart) stop; sleep 1; start ;;
+    *) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac
