@@ -1,0 +1,30 @@
+name: Trigger Entware package build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch versioned package build
+        env:
+          GITVERSE_TOKEN: ${{ secrets.CI_JOB_TOKEN }}
+          GITVERSE_REF: ${{ gitverse.ref }}
+        run: |
+          set -euo pipefail
+          TAG_NAME="${GITVERSE_REF#refs/tags/}"
+          VERSION="${TAG_NAME#v}"
+          PAYLOAD="$(jq -n \
+            --arg source_ref "$TAG_NAME" \
+            --arg package_version "$VERSION" \
+            --arg package_release "1" \
+            '{source_ref: $source_ref, package_version: $package_version, package_release: $package_release}')"
+          curl --fail-with-body --silent --show-error -X POST \
+            "https://api.gitverse.ru/repos/kashtan404/entware-build/actions/workflows/build.yml/dispatches?branch=master" \
+            -H "Authorization: Bearer ${GITVERSE_TOKEN}" \
+            -H "Accept: application/vnd.gitverse.object+json;version=1" \
+            -H "Content-Type: application/json" \
+            --data-raw "$PAYLOAD"

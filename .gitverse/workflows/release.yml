@@ -1,0 +1,116 @@
+name: Build and publish nclite release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG_REF: ${{ gitverse.ref }}
+
+    steps:
+      - name: Checkout source with complete history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Parse and validate release tag
+        id: meta
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TAG_NAME="${TAG_REF#refs/tags/}"
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a stable SemVer tag like v1.2.3, got: $TAG_NAME" >&2
+            exit 2
+          fi
+          VERSION="${TAG_NAME#v}"
+          TAG_COMMIT="$(git rev-parse "${TAG_NAME}^{commit}")"
+          {
+            echo "tag_name=$TAG_NAME"
+            echo "version=$VERSION"
+            echo "tag_commit=$TAG_COMMIT"
+          } >> "$GITVERSE_OUTPUT"
+
+      - name: Install Go version declared by go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build binary and changelog
+        id: assets
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG_COMMIT: ${{ steps.meta.outputs.tag_commit }}
+        run: |
+          set -Eeuo pipefail
+
+          echo "Building nclite $TAG_NAME for linux/arm64 (CGO disabled)"
+          make build-arm64
+          file dist/nclite
+
+          CHANGELOG="dist/CHANGELOG-${VERSION}.md"
+          PREVIOUS_TAG=""
+          if git rev-parse --verify "${TAG_COMMIT}^" >/dev/null 2>&1; then
+            PREVIOUS_TAG="$(git describe --tags --abbrev=0 --first-parent \
+              --match 'v[0-9]*' "${TAG_COMMIT}^" 2>/dev/null || true)"
+          fi
+
+          {
+            echo "# nclite ${TAG_NAME}"
+            echo
+            if [[ -n "$PREVIOUS_TAG" ]]; then
+              echo "Changes from **${PREVIOUS_TAG}** to **${TAG_NAME}**."
+              echo
+              echo "## Commits"
+              echo
+              git log --reverse --format='- **%s** (`%h`)%n%b%n' \
+                "${PREVIOUS_TAG}..${TAG_COMMIT}"
+            else
+              echo "Initial release."
+              echo
+              echo "## Commits"
+              echo
+              git log --reverse --format='- **%s** (`%h`)%n%b%n' "$TAG_COMMIT"
+            fi
+          } > "$CHANGELOG"
+
+          if ! grep -qE '^- \*\*' "$CHANGELOG"; then
+            printf '\nNo changes.\n' >> "$CHANGELOG"
+          fi
+
+          {
+            echo "title=nclite ${TAG_NAME}"
+            echo "binary=dist/nclite"
+            echo "changelog=$CHANGELOG"
+          } >> "$GITVERSE_OUTPUT"
+
+          DELIMITER="GV_RELEASE_NOTES_$(date +%s)_${VERSION//./_}"
+          {
+            echo "body<<${DELIMITER}"
+            cat "$CHANGELOG"
+            echo "$DELIMITER"
+          } >> "$GITVERSE_OUTPUT"
+
+      - name: Keep build outputs as CI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nclite-${{ steps.meta.outputs.tag_name }}-release-assets
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitVerse release and attach files
+        uses: actions/create-release@v1
+        with:
+          api_key: ${{ secrets.CI_JOB_TOKEN }}
+          title: ${{ steps.assets.outputs.title }}
+          body: ${{ steps.assets.outputs.body }}
+          draft: true
+          pre_release: false
