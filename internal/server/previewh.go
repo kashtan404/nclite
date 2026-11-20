@@ -51,6 +51,12 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 // servePreview renders (or fetches from cache) the preview of n and writes it.
 // name decides the file type, src is where the bytes are on disk.
 func (s *Server) servePreview(w http.ResponseWriter, r *http.Request, n *store.Node, name, src string) {
+	s.servePreviewN(w, r, n, name, src, true)
+}
+
+// servePreviewN is servePreview; note=false keeps the request out of the statistics
+// of preview sizes that the phone apps ask for.
+func (s *Server) servePreviewN(w http.ResponseWriter, r *http.Request, n *store.Node, name, src string, note bool) {
 	q := r.URL.Query()
 	if !s.pv.Supported(name) {
 		http.NotFound(w, r)
@@ -60,7 +66,9 @@ func (s *Server) servePreview(w http.ResponseWriter, r *http.Request, n *store.N
 	y, _ := strconv.Atoi(q.Get("y"))
 	keepAspect := q.Get("a") == "1" || q.Get("a") == "true"
 	cover := q.Get("mode") == "cover" && !keepAspect
-	s.noteSize(x, y, cover)
+	if note {
+		s.noteSize(x, y, cover)
+	}
 	file, err := s.pv.Get(n.ID, n.ETag, src, name, x, y, cover)
 	if err != nil {
 		logPreviewErr(name, err)

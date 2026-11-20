@@ -82,3 +82,27 @@ func TestParseSizesOrder(t *testing.T) {
 		t.Fatalf("got %v", names)
 	}
 }
+
+func TestAlbumAndNameHelpers(t *testing.T) {
+	for in, want := range map[string]bool{"Trip 2024": true, "И то л": true, "a(b)": true,
+		"": false, ".": false, "..": false, "a/b": false, "a\\b": false, "a\nb": false} {
+		if validName(in) != want {
+			t.Errorf("validName(%q) = %v, want %v", in, !want, want)
+		}
+	}
+	if id, ok := parsePhotoItem("42-IMG_0001.jpg"); !ok || id != 42 {
+		t.Error("photo item name must parse")
+	}
+	for _, bad := range []string{"IMG.jpg", "-x", "x-1", ""} {
+		if _, ok := parsePhotoItem(bad); ok {
+			t.Errorf("parsePhotoItem(%q) must fail", bad)
+		}
+	}
+	for mt, want := range map[string]bool{"image/jpeg": true, "application/pdf": true, "video/mp4": true, "audio/mpeg": true,
+		"text/plain; charset=utf-8": true, "text/html": false, "image/svg+xml": false, "application/xml": false,
+		"application/javascript": false, "application/octet-stream": false} {
+		if inlineSafe(mt) != want {
+			t.Errorf("inlineSafe(%q) = %v, want %v", mt, !want, want)
+		}
+	}
+}

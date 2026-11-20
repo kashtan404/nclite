@@ -16,6 +16,7 @@
 
   "admin_listen": "127.0.0.1:8090",
   "admin_url": "http://192.168.1.1:83/admin",
+  "web_path": "/cloud",
 
   "preview": {
     "enabled": true,

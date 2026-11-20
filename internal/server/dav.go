@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -102,7 +100,12 @@ func (s *Server) handleDAVRoot(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if _, ok := s.authed(w, r); !ok {
+	user, ok := s.authed(w, r)
+	if !ok {
+		return
+	}
+	if r.Method == "SEARCH" {
+		s.davSearch(w, r, user)
 		return
 	}
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
@@ -117,17 +120,11 @@ func (d *davReq) status(code int) {
 }
 
 func (d *davReq) fail(err error) {
-	switch {
-	case errors.Is(err, vfs.ErrStorageMissing):
+	code, msg := httpStatus(err)
+	if code == http.StatusServiceUnavailable {
 		d.w.Header().Set("Retry-After", "30")
-		http.Error(d.w, "Storage unavailable", http.StatusServiceUnavailable)
-	case errors.Is(err, fs.ErrNotExist):
-		http.Error(d.w, "Not Found", http.StatusNotFound)
-	case errors.Is(err, fs.ErrPermission):
-		http.Error(d.w, "Forbidden", http.StatusForbidden)
-	default:
-		http.Error(d.w, "Internal Server Error", http.StatusInternalServerError)
 	}
+	http.Error(d.w, msg, code)
 }
 
 func (d *davReq) fileHeaders(n *store.Node) {
@@ -174,10 +171,7 @@ func (d *davReq) get() {
 // ---- PUT -------------------------------------------------------------------------
 
 // parentIsDir checks that the parent of rel exists and is a directory.
-func (d *davReq) parentIsDir(owner, rel string) bool {
-	fi, err := os.Stat(d.s.fs.Real(owner, store.ParentOf(rel)))
-	return err == nil && fi.IsDir()
-}
+func (d *davReq) parentIsDir(owner, rel string) bool { return d.s.parentIsDir(owner, rel) }
 
 func (d *davReq) put() {
 	s := d.s
@@ -271,36 +265,8 @@ func (d *davReq) finishWrite(src, real string, existed, mtimeAccepted bool) bool
 // ---- MKCOL / DELETE --------------------------------------------------------------
 
 func (d *davReq) mkcol() {
-	if d.t.ReadOnly {
-		http.Error(d.w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	if d.t.Rel == "" {
-		http.Error(d.w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !d.parentIsDir(d.t.Owner, d.t.Rel) {
-		http.Error(d.w, "Conflict", http.StatusConflict)
-		return
-	}
-	real := d.s.fs.Real(d.t.Owner, d.t.Rel)
-	var n *store.Node
-	err := d.s.fs.Structural(func() error {
-		if err := os.Mkdir(real, 0o755); err != nil {
-			return err
-		}
-		fi, err := os.Stat(real)
-		if err != nil {
-			return err
-		}
-		n, err = d.s.st.SyncPath(d.t.Owner, d.t.Rel, fi)
-		return err
-	})
+	n, err := d.s.doMkdir(d.user, d.rel)
 	if err != nil {
-		if errors.Is(err, fs.ErrExist) {
-			http.Error(d.w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
 		d.fail(err)
 		return
 	}
@@ -309,15 +275,7 @@ func (d *davReq) mkcol() {
 }
 
 func (d *davReq) del() {
-	if d.t.ReadOnly || d.t.MountRoot || d.t.Rel == "" {
-		http.Error(d.w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	if _, err := os.Lstat(d.s.fs.Real(d.t.Owner, d.t.Rel)); err != nil {
-		d.fail(err)
-		return
-	}
-	if err := d.s.removeToTrash(d.t.Owner, d.t.Rel); err != nil {
+	if err := d.s.doDelete(d.user, d.rel); err != nil {
 		d.fail(err)
 		return
 	}
@@ -327,70 +285,17 @@ func (d *davReq) del() {
 // ---- MOVE / COPY -----------------------------------------------------------------
 
 func (d *davReq) moveCopy() {
-	s := d.s
+	if d.albumDestination() { // COPY of a photo into an album: no file is copied
+		return
+	}
 	dstRel, ok := d.destination()
 	if !ok {
 		http.Error(d.w, "Bad Request", http.StatusBadRequest)
 		return
 	}
-	t2 := s.fs.Resolve(d.user, dstRel)
-	if t2.Owner != d.t.Owner {
-		http.Error(d.w, "Forbidden: cannot move between accounts", http.StatusForbidden)
-		return
-	}
 	move := d.r.Method == "MOVE"
-	// destination: real spelling for the parents, the leaf keeps what the client chose
-	t2.Rel = s.fs.CanonParent(t2.Owner, t2.Rel)
-	sameObject := s.fs.CaseInsensitive() && strings.EqualFold(t2.Rel, d.t.Rel)
-	if sameObject && !move { // copying a file onto itself under another letter case
-		http.Error(d.w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	if t2.ReadOnly || (move && d.t.ReadOnly) || t2.Rel == "" || d.t.Rel == "" ||
-		t2.MountRoot || (move && d.t.MountRoot) || t2.Rel == d.t.Rel ||
-		strings.HasPrefix(t2.Rel+"/", d.t.Rel+"/") {
-		http.Error(d.w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	owner := d.t.Owner
-	src, dst := s.fs.Real(owner, d.t.Rel), s.fs.Real(owner, t2.Rel)
-	if _, err := os.Stat(src); err != nil {
-		d.fail(err)
-		return
-	}
-	if !d.parentIsDir(owner, t2.Rel) {
-		http.Error(d.w, "Conflict", http.StatusConflict)
-		return
-	}
-	_, statErr := os.Stat(dst)
-	// a rename that only changes letter case "finds" the file itself at the destination
-	existed := statErr == nil && !sameObject
-	if existed {
-		if strings.EqualFold(d.r.Header.Get("Overwrite"), "F") {
-			http.Error(d.w, "Precondition Failed", http.StatusPreconditionFailed)
-			return
-		}
-		if err := s.removeToTrash(owner, s.fs.Canon(owner, t2.Rel)); err != nil {
-			d.fail(err)
-			return
-		}
-	}
-	if move {
-		err := s.fs.Structural(func() error {
-			if err := os.Rename(src, dst); err != nil {
-				return err
-			}
-			return s.st.MovePath(owner, d.t.Rel, t2.Rel)
-		})
-		if err != nil {
-			d.fail(err)
-			return
-		}
-	} else if err := copyTree(src, dst); err != nil {
-		d.fail(err)
-		return
-	}
-	n, err := s.fs.NodeFor(owner, t2.Rel)
+	overwrite := !strings.EqualFold(d.r.Header.Get("Overwrite"), "F")
+	n, existed, err := d.s.doMoveCopy(d.user, d.rel, dstRel, move, overwrite)
 	if err != nil {
 		d.fail(err)
 		return

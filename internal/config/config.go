@@ -41,6 +41,7 @@ type Config struct {
 	AccessLog     bool    `json:"access_log"`
 	AdminListen   string  `json:"admin_listen"` // dedicated listener for the admin UI only, e.g. "127.0.0.1:8090"
 	AdminURL      string  `json:"admin_url"`    // where you open the admin, e.g. "http://192.168.1.1:83/admin"
+	WebPath       string  `json:"web_path"`     // path of the file browser on the admin listener, default "/cloud"
 	Preview       Preview `json:"preview"`
 }
 
@@ -56,6 +57,7 @@ func Default() *Config {
 		GCPercent:     50,
 		RescanMinutes: 360,
 		TrashDays:     30,
+		WebPath:       "/cloud",
 		Preview: Preview{
 			Enabled:     true,
 			Workers:     1,
@@ -84,6 +86,9 @@ func Load(path string) (*Config, error) {
 	c.BaseURL = strings.TrimRight(c.BaseURL, "/")
 	c.AdminURL = strings.TrimRight(c.AdminURL, "/")
 	if err := c.validateAdminURL(); err != nil {
+		return nil, err
+	}
+	if err := c.validateWebPath(); err != nil {
 		return nil, err
 	}
 	for _, p := range []*string{&c.DBPath, &c.DataDir, &c.CacheDir} {
@@ -128,4 +133,26 @@ func (c *Config) AdminPrefix() string {
 		}
 	}
 	return "/admin"
+}
+
+// WebPrefix is the URL path of the file browser (default "/cloud").
+func (c *Config) WebPrefix() string {
+	p := "/" + strings.Trim(c.WebPath, "/")
+	if p == "/" {
+		return "/cloud"
+	}
+	return p
+}
+
+func (c *Config) validateWebPath() error {
+	p := c.WebPrefix()
+	first := strings.SplitN(strings.TrimPrefix(p, "/"), "/", 2)[0]
+	a := c.AdminPrefix()
+	switch {
+	case strings.Contains(p, ".."), reserved[first]:
+		return fmt.Errorf("web_path %q is not allowed (it would hide a Nextcloud API path)", c.WebPath)
+	case p == a, strings.HasPrefix(p, a+"/"), strings.HasPrefix(a, p+"/"):
+		return fmt.Errorf("web_path %q and the admin path %q must not overlap", p, a)
+	}
+	return nil
 }

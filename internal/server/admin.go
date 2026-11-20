@@ -58,6 +58,8 @@ type shareView struct {
 	ReadOnly            bool
 }
 type adminPage struct {
+	CSS                             template.CSS
+	WebBase                         string
 	Base                            string
 	Product, Flash, CSRF, Me        string
 	LoggedIn                        bool
@@ -129,7 +131,7 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderAdmin(w http.ResponseWriter, me, sess, flash string) {
-	pg := adminPage{Base: s.adminPrefix, Product: s.cfg.ProductName, Flash: flash, LoggedIn: me != "", Me: me}
+	pg := adminPage{CSS: sharedCSS(), WebBase: s.webBase(), Base: s.adminPrefix, Product: s.cfg.ProductName, Flash: flash, LoggedIn: me != "", Me: me}
 	if me != "" {
 		pg.CSRF = s.csrf(sess)
 		pg.DataDir, pg.DBPath, pg.CacheDir = s.cfg.DataDir, s.cfg.DBPath, s.cfg.CacheDir
@@ -386,4 +388,17 @@ func (s *Server) adminSecure(r *http.Request) bool {
 		return true
 	}
 	return s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+func sharedCSS() template.CSS {
+	b, _ := staticFS.ReadFile("static/style.css")
+	return template.CSS(b)
+}
+
+// webBase is where the file browser lives, or "" when it is not served (it needs admin_listen).
+func (s *Server) webBase() string {
+	if s.cfg.AdminListen == "" {
+		return ""
+	}
+	return s.webPrefix
 }

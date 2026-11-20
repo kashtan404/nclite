@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS trash(
   deleted_at INTEGER NOT NULL, is_dir INTEGER NOT NULL, size INTEGER NOT NULL, UNIQUE(owner, name, deleted_at));
 CREATE TABLE IF NOT EXISTS direct(
   token TEXT PRIMARY KEY, user TEXT NOT NULL, node_id INTEGER NOT NULL, expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS albums(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, owner TEXT NOT NULL, name TEXT NOT NULL, created INTEGER NOT NULL,
+  UNIQUE(owner, name));
+CREATE TABLE IF NOT EXISTS album_items(
+  album_id INTEGER NOT NULL, node_id INTEGER NOT NULL, added INTEGER NOT NULL, seq INTEGER NOT NULL,
+  PRIMARY KEY(album_id, node_id)) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS album_items_node ON album_items(node_id);
 CREATE TABLE IF NOT EXISTS shares(
   id INTEGER PRIMARY KEY, owner TEXT NOT NULL, path TEXT NOT NULL, target TEXT NOT NULL,
   readonly INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, UNIQUE(owner, path, target));
@@ -168,6 +175,8 @@ func (s *Store) DeleteUser(name string) error {
 		sql  string
 		args []any
 	}{
+		{`DELETE FROM album_items WHERE album_id IN (SELECT id FROM albums WHERE owner=?) OR node_id IN (SELECT id FROM nodes WHERE owner=? OR owner=?)`, []any{name, name, tr}},
+		{`DELETE FROM albums WHERE owner=?`, []any{name}},
 		{`DELETE FROM favorites WHERE user=? OR node_id IN (SELECT id FROM nodes WHERE owner=? OR owner=?)`, []any{name, name, tr}},
 		{`DELETE FROM shares WHERE owner=? OR target=?`, []any{name, name}},
 		{`DELETE FROM nodes WHERE owner=? OR owner=?`, []any{name, tr}},
@@ -355,13 +364,15 @@ func touch(tx execer, owner string, paths []string) error {
 }
 
 func deleteTree(tx execer, owner, p string) error {
-	if _, err := tx.Exec(`DELETE FROM favorites WHERE node_id IN (SELECT id FROM nodes WHERE owner=? AND path=?)`, owner, p); err != nil {
-		return err
-	}
-	if p != "" {
-		if _, err := tx.Exec(`DELETE FROM favorites WHERE node_id IN (SELECT id FROM nodes WHERE owner=? AND path>=? AND path<?)`,
-			owner, p+"/", p+"0"); err != nil {
+	for _, tbl := range []string{"favorites", "album_items"} {
+		if _, err := tx.Exec(`DELETE FROM `+tbl+` WHERE node_id IN (SELECT id FROM nodes WHERE owner=? AND path=?)`, owner, p); err != nil {
 			return err
+		}
+		if p != "" {
+			if _, err := tx.Exec(`DELETE FROM `+tbl+` WHERE node_id IN (SELECT id FROM nodes WHERE owner=? AND path>=? AND path<?)`,
+				owner, p+"/", p+"0"); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err := tx.Exec(`DELETE FROM nodes WHERE owner=? AND path=?`, owner, p); err != nil {

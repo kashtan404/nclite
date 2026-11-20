@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Product}} files</title>
+<link rel="stylesheet" href="{{.Base}}/static/style.css">
+</head>
+<body class="webui" data-base="{{.Base}}">
+{{if not .LoggedIn}}
+<main style="max-width:340px;margin:60px auto"><section>
+<h1>{{.Product}}</h1>
+{{if .Error}}<p class="flash">{{.Error}}</p>{{end}}
+<form method="post" action="{{.Base}}/login">
+<p><input name="user" placeholder="User name" autocapitalize="none" autocomplete="username" required style="width:100%;box-sizing:border-box"></p>
+<p><input name="password" type="password" placeholder="Password" autocomplete="current-password" required style="width:100%;box-sizing:border-box"></p>
+<p><button style="width:100%">Log in</button></p></form></section></main>
+{{else}}
+<header class="topbar"><h1>{{.Product}} · files</h1><span class="grow"></span><span id="who" class="mut"></span><button id="logout" class="d">Log out</button></header>
+<div id="toast" class="toast hidden"></div>
+<div class="layout" id="layout">
+  <aside id="side" class="side">
+    <h2>Folders</h2><div id="tree" class="tree"></div>
+    <h2>Albums <button id="newAlbum" class="mini" title="New album">+</button></h2><div id="albums" class="albums"></div>
+  </aside>
+  <section id="main" class="content">
+    <div class="toolbar" id="toolbar">
+      <label class="chk" title="Select all shown"><input type="checkbox" id="selAll"></label>
+      <span id="selInfo" class="mut"></span>
+      <span class="sep"></span>
+      <button id="bCopy">Copy</button><button id="bMove">Move</button><button id="bRename">Rename</button><button id="bDelete" class="d">Delete</button>
+      <button id="bMkdir">New folder</button>
+      <button id="bAddAlbum">Add to album</button><button id="bRemAlbum">Remove from album</button>
+      <span id="albumBtns"><button id="bAlbRename">Rename album</button><button id="bAlbDelete" class="d">Delete album</button></span>
+      <span class="grow"></span>
+      <select id="sort" title="Sort"><option value="name">Name</option><option value="date">Date</option><option value="size">Size</option></select>
+      <span class="seg" id="views">
+        <button data-v="list" title="List">List</button><button data-v="table" title="Table">Table</button>
+        <button data-v="small" title="Small previews (512 px)">Small</button><button data-v="large" title="Large previews (1024 px)">Large</button>
+      </span>
+      <button id="bPane" title="Show or hide the viewer pane">Viewer</button>
+    </div>
+    <div id="crumbs" class="crumbs"></div>
+    <div id="view" class="view"></div>
+  </section>
+  <div id="split" class="split hidden" title="Drag to resize"></div>
+  <section id="pane" class="pane hidden">
+    <div class="panehead"><button id="pPrev" class="mini">&lsaquo;</button><button id="pNext" class="mini">&rsaquo;</button><b id="pName" class="grow ellipsis"></b><a id="pOpen" target="_blank" rel="noopener">Open</a><a id="pDl">Download</a><button id="pClose" class="mini">&times;</button></div>
+    <div id="pBody" class="panebody"></div>
+    <div id="pInfo" class="mut paneinfo"></div>
+  </section>
+</div>
+<div id="modal" class="modal hidden"></div>
+<script src="{{.Base}}/static/app.js"></script>
+{{end}}
+</body></html>

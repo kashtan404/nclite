@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"mime"
@@ -43,6 +44,7 @@ type Server struct {
 	mux        *http.ServeMux
 
 	adminPrefix string // URL path of the admin UI
+	webPrefix   string // URL path of the file browser (served on the admin listener only)
 
 	jobMu sync.Mutex
 	job   *Job // the running or most recently finished admin job
@@ -69,6 +71,7 @@ func New(cfg *config.Config, st *store.Store, v *vfs.VFS, pv *preview.Manager) (
 		mux:        http.NewServeMux(),
 	}
 	s.adminPrefix = cfg.AdminPrefix()
+	s.webPrefix = cfg.WebPrefix()
 	if st.GetMeta("index_fmt") != "3" {
 		// Older versions could index a folder a second time: under another letter case
 		// on case-insensitive disks, and under "Photos/" when a shared folder was opened
@@ -114,6 +117,7 @@ func (s *Server) routes() {
 	m.HandleFunc("/remote.php/webdav", s.handleDAV(false))
 	m.HandleFunc("/remote.php/dav/uploads/", s.handleUploads)
 	m.HandleFunc("/remote.php/dav/trashbin/", s.handleTrash)
+	m.HandleFunc("/remote.php/dav/photos/", s.handlePhotos)
 	m.HandleFunc("/remote.php/direct/", s.handleDirect)
 	m.HandleFunc("/remote.php/dav/", s.handleDAVRoot)
 	m.HandleFunc("/remote.php/dav", s.handleDAVRoot)
@@ -138,17 +142,23 @@ func (s *Server) registerAdmin(m *http.ServeMux) {
 	m.HandleFunc(s.adminPrefix+"/", s.handleAdmin)
 }
 
-// AdminHandler serves only the admin UI, for the dedicated admin_listen listener.
-// None of the file, OCS or login endpoints exist there.
+// AdminHandler serves the admin UI and the file browser, for the dedicated admin_listen
+// listener. None of the file, OCS or login endpoints of the Nextcloud API exist there.
 func (s *Server) AdminHandler() http.Handler {
 	m := http.NewServeMux()
 	s.registerAdmin(m)
+	s.registerWeb(m)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, s.adminPrefix, http.StatusFound)
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+		fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`+
+			`<title>%[1]s</title><style>%[2]s</style><main style="max-width:420px;margin-top:60px"><section><h1>%[1]s</h1>`+
+			`<p><a href="%[3]s/">Files, photos and albums</a></p><p><a href="%[4]s/">Administration</a></p></section></main>`,
+			template.HTMLEscapeString(s.cfg.ProductName), sharedCSS(), s.webPrefix, s.adminPrefix)
 	})
 	if s.cfg.AccessLog {
 		return accessLog(m)
