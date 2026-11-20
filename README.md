@@ -77,6 +77,9 @@ go mod tidy
 make build-arm64            # dist/nclite, статический, без cgo. Для других платформ:
                             # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/nclite ./cmd/nclite
 
+# либо скачать и распаковать необходимый релиз
+https://gitverse.ru/kashtan404/nclite/releases
+
 # 2. Установка на устройство (пути как в Entware по умолчанию)
 scp dist/nclite router:/opt/bin/
 ssh router
