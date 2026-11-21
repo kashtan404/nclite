@@ -17,6 +17,7 @@ It is **not** a Nextcloud replacement: there are no apps, no calendar or contact
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick start](#quick-start)
+- [Manual build](#manual-build)
 - [Configuration](#configuration)
 - [Deployment](#deployment)
 - [Using it](#using-it)
@@ -70,6 +71,39 @@ It is **not** a Nextcloud replacement: there are no apps, no calendar or contact
 - A current Go release to build from source.
 
 ## Quick start
+
+```sh
+# 1. Connect feed
+cat > "/opt/etc/opkg/kashtan404-keenetic.conf" <<EOF
+src/gz nclite https://kashtan404.gitverse.site/entware-repo/aarch64-k3.10
+EOF
+
+# 2. Install deps
+opkg install ffmpeg poppler-utils python3 python3-pip nginx-ssl nginx-mod-headers-more
+pip3 install heif-convert
+
+# 3. Install nclite
+opkg update
+opkg install nclite
+
+# 4. Configure /opt/etc/nclite/config.json
+Set correct values for db_path, data_dir, cache_dir, listen, base_url, admin_listen, admin_url
+Additionally you able to add excludes for extentions not need prefiew via set exclude_ext
+
+# 5. Configure nginx
+templates you can get from https://gitverse.ru/kashtan404/nclite/content/master/deploy
+nginx.conf and conf.d/nclite.conf
+
+# 6. Create the first user. The command-line tool creates administrators;
+#    create ordinary users later on the admin page.
+nclite -config /opt/etc/nclite/config.json user add alice
+
+# 7. Start
+/opt/etc/init.d/S99nclite start
+/opt/etc/init.d/S80nginx start
+```
+
+## Manual build
 
 ```sh
 # 1. Build (on any machine with Go)

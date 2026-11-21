@@ -16,7 +16,8 @@ nclite реализует ту часть серверного API Nextcloud, к
 
 - [Возможности](#возможности)
 - [Требования](#требования)
-- [Быстрый старт](#быстрый-старт)
+- [Быстрый старт с opkg](#быстрый-старт-с-opkg)
+- [Ручная установка](#ручная-установка)
 - [Настройка](#настройка)
 - [Развёртывание](#развёртывание)
 - [Как пользоваться](#как-пользоваться)
@@ -69,7 +70,40 @@ nclite реализует ту часть серверного API Nextcloud, к
 
 - Актуальный Go для сборки из исходников.
 
-## Быстрый старт
+## Быстрый старт с opkg
+
+```sh
+# 1. Подключение feed
+cat > "/opt/etc/opkg/kashtan404-keenetic.conf" <<EOF
+src/gz nclite https://kashtan404.gitverse.site/entware-repo/aarch64-k3.10
+EOF
+
+# 2. Установка зависимостей
+opkg install ffmpeg poppler-utils python3 python3-pip nginx-ssl nginx-mod-headers-more
+pip3 install heif-convert
+
+# 3. Установка nclite
+opkg update
+opkg install nclite
+
+# 4. Настройка конфига /opt/etc/nclite/config.json
+Обязательно указать корректные db_path, data_dir, cache_dir, listen, base_url, admin_listen, admin_url
+Дополнительно можно указать исключения для расширений для которых не нужно превью через exclude_ext
+
+# 5. Настройка конфигов nginx
+шаблоны можно взять в https://gitverse.ru/kashtan404/nclite/content/master/deploy
+nginx.conf и conf.d/nclite.conf
+
+# 6. Создайте первого пользователя. Командная строка создаёт администраторов,
+#    обычных пользователей добавляйте потом в админке.
+nclite -config /opt/etc/nclite/config.json user add alice
+
+# 7. Запуск
+/opt/etc/init.d/S99nclite start
+/opt/etc/init.d/S80nginx start
+```
+
+## Ручная установка
 
 ```sh
 # 1. Сборка (на любой машине с Go)
@@ -93,6 +127,8 @@ nclite user add alice
 
 # 4. Запуск
 nclite serve                # или установите deploy/S99nclite как init-скрипт
+
+# 5. Плюс аналогично с nginx из быстрого старта
 ```
 
 Дальше поставьте перед ним nginx (или другой прокси) с HTTPS, см. [Развёртывание](#развёртывание), и введите адрес сервера в приложении Nextcloud. Приложение откроет страницу входа nclite, после входа вы подключены.
