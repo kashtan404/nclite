@@ -89,7 +89,7 @@ opkg install nclite
 Дополнительно можно указать исключения для расширений для которых не нужно превью через exclude_ext
 
 # 5. Настройка конфигов nginx
-шаблоны можно взять в https://github.com/kashtan404/nclite/content/master/deploy
+шаблоны можно взять в https://github.com/kashtan404/nclite/tree/master/deploy
 nginx.conf и conf.d/nclite.conf
 
 # 6. Создайте первого пользователя. Командная строка создаёт администраторов,
