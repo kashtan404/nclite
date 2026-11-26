@@ -1,5 +1,3 @@
-[![Build and publish nclite release](https://gitverse.ru/api/repos/kashtan404/nclite/actions/workflows/release.yml/badge.svg?lang=ru)](https://gitverse.ru/kashtan404/nclite/cicd?workflow=release.yml&workflowName=Build%20and%20publish%20nclite%20release)
-
 # nclite
 
 **Маленький файловый сервер, совместимый с Nextcloud, для роутеров и другого слабого железа.**
@@ -75,7 +73,7 @@ nclite реализует ту часть серверного API Nextcloud, к
 ```sh
 # 1. Подключение feed
 cat > "/opt/etc/opkg/kashtan404-keenetic.conf" <<EOF
-src/gz nclite https://kashtan404.gitverse.site/entware-repo/aarch64-k3.10
+src/gz nclite https://kashtan404.github.io/entware-repo/aarch64-k3.10
 EOF
 
 # 2. Установка зависимостей
@@ -91,7 +89,7 @@ opkg install nclite
 Дополнительно можно указать исключения для расширений для которых не нужно превью через exclude_ext
 
 # 5. Настройка конфигов nginx
-шаблоны можно взять в https://gitverse.ru/kashtan404/nclite/content/master/deploy
+шаблоны можно взять в https://github.com/kashtan404/nclite/content/master/deploy
 nginx.conf и conf.d/nclite.conf
 
 # 6. Создайте первого пользователя. Командная строка создаёт администраторов,
@@ -112,7 +110,7 @@ make build-arm64            # dist/nclite, статический, без cgo. �
                             # GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o dist/nclite ./cmd/nclite
 
 # либо скачать и распаковать необходимый релиз
-https://gitverse.ru/kashtan404/nclite/releases
+https://github.com/kashtan404/nclite/releases
 
 # 2. Установка на устройство (пути как в Entware по умолчанию)
 scp dist/nclite router:/opt/bin/
